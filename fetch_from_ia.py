@@ -4,6 +4,7 @@ import asyncio
 from pathlib import Path
 import aiohttp
 import requests
+import zipfile
 
 
 async def download_file(
@@ -57,7 +58,7 @@ async def download_item(
     await asyncio.gather(*tasks)
 
 
-async def main(email: str, collection: str):
+async def main(email: str, collection: str, limit: int):
     headers = {"User-Agent": f"fetch-from-ia/0.1 (mailto:{email})"}
     search_query = f"mediatype:texts AND format:hocr AND date:[* TO 1924-12-31] AND NOT access-restricted-item:true AND NOT identifier:*mpeg21* AND language:eng AND collection:{collection}"
     output_base = "data/raw"
@@ -68,6 +69,7 @@ async def main(email: str, collection: str):
         "q": search_query,
         "fl[]": "identifier",
         "output": "json",
+        "rows": str(limit),
         "start": "1",
     }
 
@@ -89,11 +91,20 @@ async def main(email: str, collection: str):
 
         await asyncio.gather(*tasks)
 
+    # unpack zip files
+    for item_dir in Path(output_base).iterdir():
+        for zip_path in item_dir.glob("*.zip"):
+            print(f"Extracting {zip_path}")
+            with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+                zip_ref.extractall(item_dir)
+            print(f"✅ Extracted {zip_path}")
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Fetch book images with hOCR from Internet Archive")
     parser.add_argument("email", help="Email address for User-Agent header")
     parser.add_argument("collection", help="Internet Archive collection name")
+    parser.add_argument("--limit", type=int, default=200, help="Number of books to fetch (default: 200)")
 
     args = parser.parse_args()
-    asyncio.run(main(args.email, args.collection))
+    asyncio.run(main(args.email, args.collection, args.limit))
