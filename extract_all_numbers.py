@@ -1,10 +1,28 @@
 """Extract number images from hOCR files and JP2 images."""
 import re
 from pathlib import Path
+from collections import defaultdict
 from concurrent.futures import ProcessPoolExecutor, as_completed
+from typing import TypeVar, Callable
 from selectolax.parser import HTMLParser
 from PIL import Image
 from word2number import w2n
+
+type NumberWithBbox = tuple[int, int, int, int, int]
+
+T = TypeVar('T')
+
+# Precompiled regex patterns for hOCR metadata
+_BBOX_RE = re.compile(r'bbox (\d+) (\d+) (\d+) (\d+)')
+_CONFIDENCE_RE = re.compile(r'x_wconf (\d+(?:\.\d+)?)')
+_IMAGE_PATH_RE = re.compile(r'image "([^"]+)"')
+
+
+def _match_group(title: str, pattern: re.Pattern, *, cast: Callable[[str], T]) -> T | None:
+    """Extract and convert a regex match from hOCR title attribute."""
+    if match := pattern.search(title):
+        return cast(match.group(1))
+    return None
 
 
 def extract_number_from_text(text: str) -> int | None:
@@ -28,9 +46,9 @@ def extract_number_from_text(text: str) -> int | None:
     # Try word to number conversion (e.g., "twenty-three" -> 23)
     # Skip if result would be 0 (word2number incorrectly converts "point" and other words to 0)
     try:
-        num = w2n.word_to_num(text)
-        if isinstance(num, int) and 1 <= num <= 50_000:
-            return num
+        result = w2n.word_to_num(text)
+        if isinstance(result, int) and 1 <= result <= 50_000:
+            return result
     except (ValueError, IndexError):
         pass
 
@@ -39,35 +57,23 @@ def extract_number_from_text(text: str) -> int | None:
 
 def parse_bbox(title: str) -> tuple[int, int, int, int] | None:
     """Extract bounding box coordinates from hOCR title attribute."""
-    if match := re.search(r'bbox (\d+) (\d+) (\d+) (\d+)', title):
+    if match := _BBOX_RE.search(title):
         x0, y0, x1, y1 = map(int, match.groups())
         return (x0, y0, x1, y1)
     return None
 
 
-def parse_ppageno(title: str) -> int | None:
-    """Extract physical page number from hOCR title attribute."""
-    if match := re.search(r'ppageno (\d+)', title):
-        return int(match.group(1))
-    return None
-
-
 def parse_confidence(title: str) -> float | None:
     """Extract OCR confidence from hOCR title attribute (x_wconf)."""
-    if match := re.search(r'x_wconf (\d+(?:\.\d+)?)', title):
-        return float(match.group(1))
-    return None
+    return _match_group(title, _CONFIDENCE_RE, cast=float)
 
 
 def parse_image_path(title: str) -> str | None:
     """Extract image path from hOCR title attribute."""
-    if match := re.search(r'image "([^"]+)"', title):
-        # Extract just the filename from the path
-        return Path(match.group(1)).name
-    return None
+    return _match_group(title, _IMAGE_PATH_RE, cast=lambda p: Path(p).name)
 
 
-def extract_numbers_from_hocr(hocr_path: Path) -> dict[str, list[tuple[int, int, int, int, int]]]:
+def extract_numbers_from_hocr(hocr_path: Path) -> dict[str, list[NumberWithBbox]]:
     """
     Parse hOCR file and extract all numbers with their bounding boxes.
     Only capture the first occurrence of each number per book.
@@ -76,8 +82,8 @@ def extract_numbers_from_hocr(hocr_path: Path) -> dict[str, list[tuple[int, int,
         Dict mapping image filename to list of (number, x0, y0, x1, y1) tuples
     """
     html = HTMLParser(hocr_path.read_text())
-    numbers_by_image = {}
-    seen_numbers = set()
+    numbers_by_image: dict[str, list[NumberWithBbox]] = defaultdict(list)
+    seen_numbers: set[int] = set()
 
     # Find all pages
     for page in html.css('div.ocr_page'):
@@ -90,26 +96,14 @@ def extract_numbers_from_hocr(hocr_path: Path) -> dict[str, list[tuple[int, int,
         for word in page.css('span.ocrx_word'):
             if not (text := word.text()):
                 continue
-
-            if (number := extract_number_from_text(text)) is None:
+            if (number := extract_number_from_text(text)) is None or number in seen_numbers:
                 continue
-
-            # Skip if we've already captured this number in this book
-            if number in seen_numbers:
-                continue
-
             if not (word_title := word.attributes.get('title')):
                 continue
-
-            # Only include numbers with confidence > 90
             if (confidence := parse_confidence(word_title)) is None or confidence <= 90:
                 continue
-
             if (bbox := parse_bbox(word_title)) is None:
                 continue
-
-            if image_name not in numbers_by_image:
-                numbers_by_image[image_name] = []
 
             numbers_by_image[image_name].append((number, *bbox))
             seen_numbers.add(number)
@@ -120,12 +114,6 @@ def extract_numbers_from_hocr(hocr_path: Path) -> dict[str, list[tuple[int, int,
 def extract_and_save_numbers(hocr_path: Path, jp2_dir: Path, output_dir: Path, book_name: str):
     """
     Extract all numbers from hOCR file and save corresponding image regions.
-
-    Args:
-        hocr_path: Path to hOCR HTML file
-        jp2_dir: Directory containing JP2 page images
-        output_dir: Directory to save extracted number PNGs
-        book_name: Name of the book being processed
     """
     print(f"Processing {book_name}...")
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -137,31 +125,26 @@ def extract_and_save_numbers(hocr_path: Path, jp2_dir: Path, output_dir: Path, b
     skipped = 0
     # Extract each number from corresponding JP2
     for image_name, numbers in numbers_by_image.items():
-        # Find JP2 file by exact name
         jp2_path = jp2_dir / image_name
-
         if not jp2_path.exists():
             print(f"Warning: JP2 not found: {jp2_path}")
             continue
+
+        png_name = Path(image_name).with_suffix('.png').name
 
         # Open JP2 image once for this page
         with Image.open(jp2_path) as img:
             # Process all numbers on this page
             for number, x0, y0, x1, y1 in numbers:
-                # Check if output already exists
                 number_dir = output_dir / str(number)
-                output_path = number_dir / f"{number}_{book_name}_{image_name.replace('.jp2', '.png')}"
+                output_path = number_dir / f"{number}_{book_name}_{png_name}"
 
                 if output_path.exists():
                     skipped += 1
                     continue
 
-                # Crop region
-                region = img.crop((x0, y0, x1, y1))
-
-                # Save as PNG - create numbered subdirectories for organization
                 number_dir.mkdir(exist_ok=True)
-                region.save(output_path, 'PNG')
+                img.crop((x0, y0, x1, y1)).save(output_path, 'PNG')
                 count += 1
 
     print(f"Completed {book_name}: extracted {count} numbers, skipped {skipped} existing")
