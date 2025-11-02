@@ -1,0 +1,11 @@
+[project]
+name = "the-numbers"
+version = "0.0.1"
+description = "NaNoGenMo 2025 project"
+requires-python = ">=3.14"
+dependencies = [
+    "pillow>=12.0.0",
+    "requests>=2.32.0",
+    "selectolax>=0.4.0",
+    "word2number>=1.1",
+]
