@@ -24,7 +24,7 @@ def get_image_for_number(number: int, numbers_dir: Path, column_width_px: int) -
     number_dir = numbers_dir / str(number)
     png_files = list(number_dir.glob('*.png'))
     if not png_files:
-        raise FileNotFoundError(f"No PNG files found for number {number} in {number_dir}")
+        raise FileNotFoundError(f"No PNG files found for number {number} in {number_dir}; do you need to run compose?")
 
     image_path = png_files[0]
 
@@ -53,6 +53,9 @@ GRID_COLUMNS = 5
 #   - Height: 7 * 96 = 672px height available (reduced to 640px for safety margin)
 COLUMN_WIDTH_PX = 75
 COLUMN_TARGET_HEIGHT_PX = 640
+
+NUMBERS_DIR = Path('data/numbers')
+OUTPUT_DIR = Path('output')
 
 
 def distribute_numbers_to_columns(
@@ -95,11 +98,6 @@ def distribute_numbers_to_columns(
     return columns, numbers_used
 
 
-def get_jinja_env() -> Environment:
-    """Get configured Jinja2 environment."""
-    return Environment(loader=FileSystemLoader('templates'))
-
-
 def build_page_html(numbers_dir: Path, start_number: int, max_count: int, page_num: int, bw: bool = False) -> tuple[str, int, int]:
     """Build HTML for a single page with numbers starting from start_number.
 
@@ -138,7 +136,7 @@ def build_page_html(numbers_dir: Path, start_number: int, max_count: int, page_n
     ]
 
     # Render template
-    env = get_jinja_env()
+    env = Environment(loader=FileSystemLoader('templates'))
     template = env.get_template('page.html')
     html_content = template.render(
         fonts_dir=Path('fonts').absolute(),
@@ -182,16 +180,7 @@ def merge_pdfs(pdf_paths: list[Path], output_path: Path):
     merger.close()
 
 
-def build_toc_html(toc_entries: list[tuple[int, int, int]], bw: bool = False) -> str:
-    """Build HTML for table of contents page.
-
-    Args:
-        toc_entries: List of (start_number, end_number, page_number) tuples
-        bw: Whether to render in black and white
-
-    Returns:
-        HTML content for the TOC
-    """
+def build_toc_html(toc_entries: list[tuple[int, int, int]]) -> str:
     # Prepare entries with chapter words
     template_entries = []
     for chapter_num, (start, end, page) in enumerate(toc_entries, start=1):
@@ -199,53 +188,36 @@ def build_toc_html(toc_entries: list[tuple[int, int, int]], bw: bool = False) ->
         template_entries.append((start, end, page, chapter_word))
 
     # Render template
-    env = get_jinja_env()
+    env = Environment(loader=FileSystemLoader('templates'))
     template = env.get_template('toc.html')
     return template.render(
         fonts_dir=Path('fonts').absolute(),
-        toc_entries=template_entries,
-        bw=bw
+        toc_entries=template_entries
     )
 
 
-def main():
+def main(start: int, max_number: int, numbers_per_page: int, bw: bool, output_file: str):
     """Generate PDF book with numbers 1 to max_number."""
-    parser = argparse.ArgumentParser(description='Build a book of numbers 1 to 50,000')
-    parser.add_argument('--start', type=int, default=1, help='Starting number (default: 1)')
-    parser.add_argument('--max-number', type=int, default=50_000, help='Maximum number to include (default: 50,000)')
-    parser.add_argument('--numbers-per-page', type=int, default=200,
-                        help='Maximum number of images to try per page (default: 200)')
-    parser.add_argument('--bw', action='store_true', help='Render in black and white (default: False)')
-    parser.add_argument('--output-file', type=str, default='the_numbers.pdf',
-                        help='Output PDF filename (default: the_numbers.pdf)')
-    args = parser.parse_args()
-
-    numbers_dir = Path('data/numbers')
-    output_dir = Path('output')
-    output_dir.mkdir(exist_ok=True)
-    temp_dir = output_dir / 'temp_pages'
+    OUTPUT_DIR.mkdir(exist_ok=True)
+    temp_dir = OUTPUT_DIR / 'temp_pages'
     temp_dir.mkdir(exist_ok=True)
 
-    print(f"Generating pages (trying up to {args.numbers_per_page} numbers per page, actual count varies by image height)...")
+    print(f"Generating pages (trying up to {numbers_per_page} numbers per page, actual count varies by image height)...")
 
     page_pdfs = []
-    current_number = args.start
+    current_number = start
     page_num = 0
 
     # Track which 1000-number ranges we've seen: maps range_num -> first page where it appeared
     range_to_page = {}
 
-    while current_number <= args.max_number:
+    while current_number <= max_number:
         # Calculate how many numbers we could try to fit on this page
-        remaining = args.max_number - current_number + 1
-        max_count = min(args.numbers_per_page, remaining)
+        remaining = max_number - current_number + 1
+        max_count = min(numbers_per_page, remaining)
 
         # Generate HTML for this page and see how many numbers actually fit
-        html_content, numbers_used, end_number = build_page_html(numbers_dir, current_number, max_count, page_num + 1, args.bw)
-
-        if numbers_used == 0:
-            print(f"Warning: No numbers fit on page starting at {current_number}")
-            break
+        html_content, numbers_used, end_number = build_page_html(NUMBERS_DIR, current_number, max_count, page_num + 1, bw)
 
         print(f"Page {page_num + 1} (numbers {current_number}-{end_number})...")
 
@@ -274,32 +246,18 @@ def main():
     toc_entries = []
     for range_idx in sorted(range_to_page.keys()):
         range_start = range_idx * 1000 + 1
-        range_end = min(range_start + 999, args.max_number)
+        range_end = min(range_start + 999, max_number)
         page_num = range_to_page[range_idx]
         toc_entries.append((range_start, range_end, page_num))
 
-    # Generate title page with absolute font paths
+    # Generate title page
     print("\nGenerating title page...")
-    title_page_source = Path('title_page.html')
-    title_page_html = title_page_source.read_text(encoding='utf-8')
-
-    # Replace relative font paths with absolute paths
-    fonts_dir = Path('fonts').absolute()
-    title_page_html = title_page_html.replace(
-        'url("fonts/',
-        f'url("file://{fonts_dir}/'
+    env = Environment(loader=FileSystemLoader('templates'))
+    template = env.get_template('title_page.html')
+    title_page_html = template.render(
+        fonts_dir=Path('fonts').absolute(),
+        bw=bw
     )
-
-    # Add grayscale filter if BW mode is enabled
-    if args.bw:
-        grayscale_css = """
-        @media print {
-            img {
-                filter: grayscale(100%);
-            }
-        }
-"""
-        title_page_html = title_page_html.replace('</style>', f'{grayscale_css}    </style>')
 
     title_page_temp = temp_dir / 'title_page.html'
     title_page_temp.write_text(title_page_html, encoding='utf-8')
@@ -309,7 +267,7 @@ def main():
 
     # Generate TOC
     print("Generating table of contents...")
-    toc_html = build_toc_html(toc_entries, args.bw)
+    toc_html = build_toc_html(toc_entries)
     toc_html_path = temp_dir / 'toc.html'
     toc_html_path.write_text(toc_html, encoding='utf-8')
 
@@ -317,7 +275,7 @@ def main():
     html_to_pdf(toc_html_path, toc_pdf_path)
 
     print(f"\nMerging title page + TOC + {len(page_pdfs)} pages...")
-    final_pdf = output_dir / args.output_file
+    final_pdf = OUTPUT_DIR / output_file
     merge_pdfs([title_pdf_path, toc_pdf_path] + page_pdfs, final_pdf)
 
     print("\nCleaning up temporary PDFs...")
@@ -329,4 +287,14 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    parser = argparse.ArgumentParser(description='Build a book of numbers')
+    parser.add_argument('--start', type=int, default=1, help='Starting number (default: 1)')
+    parser.add_argument('--max-number', type=int, default=50_000, help='Maximum number to include (default: 50,000)')
+    parser.add_argument('--numbers-per-page', type=int, default=200,
+                        help='Maximum number of images to try per page (default: 200)')
+    parser.add_argument('--bw', action='store_true', help='Render in black and white (default: False)')
+    parser.add_argument('--output-file', type=str, default='the_numbers.pdf',
+                        help='Output PDF filename (default: the_numbers.pdf)')
+    args = parser.parse_args()
+
+    main(args.start, args.max_number, args.numbers_per_page, args.bw, args.output_file)

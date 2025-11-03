@@ -7,22 +7,27 @@
     <style>
         @font-face {
             font-family: "TeX Gyre Schola";
-            src: url("fonts/texgyreschola-regular.woff2") format("woff2");
+            src: url("file://{{ fonts_dir }}/texgyreschola-regular.woff2") format("woff2");
             font-weight: normal;
             font-style: normal;
         }
         @font-face {
             font-family: "TeX Gyre Schola";
-            src: url("fonts/texgyreschola-bold.woff2") format("woff2");
+            src: url("file://{{ fonts_dir }}/texgyreschola-bold.woff2") format("woff2");
             font-weight: bold;
             font-style: normal;
         }
         @font-face {
             font-family: "TeX Gyre Schola";
-            src: url("fonts/texgyreschola-italic.woff2") format("woff2");
+            src: url("file://{{ fonts_dir }}/texgyreschola-italic.woff2") format("woff2");
             font-weight: normal;
             font-style: italic;
-        }
+        }{% if bw %}
+        @media print {
+            img {
+                filter: grayscale(100%);
+            }
+        }{% endif %}
         @page {
             margin: 2in;
         }
