@@ -18,6 +18,10 @@ _BBOX_RE = re.compile(r'bbox (\d+) (\d+) (\d+) (\d+)')
 _CONFIDENCE_RE = re.compile(r'x_wconf (\d+(?:\.\d+)?)')
 _IMAGE_PATH_RE = re.compile(r'image "([^"]+)"')
 
+# Directory paths
+RAW_DIR = Path('data/raw')
+OUTPUT_DIR = Path('data/numbers')
+
 
 def _match_group(title: str, pattern: re.Pattern, *, cast: Callable[[str], T]) -> T | None:
     """Extract and convert a regex match from hOCR title attribute."""
@@ -175,7 +179,8 @@ def process_book(book_dir: Path, output_dir: Path) -> int:
     # Find JP2 directory
     jp2_dirs = list(book_dir.glob('*_jp2'))
     if not jp2_dirs:
-        print(f"No JP2 directory found in {book_dir}")
+        print(f"No JP2 files found in {book_dir}, deleting archive")
+        shutil.rmtree(book_dir)
         return 0
 
     jp2_dir = jp2_dirs[0]
@@ -185,17 +190,14 @@ def process_book(book_dir: Path, output_dir: Path) -> int:
 
 def main():
     """Process all downloaded books in parallel."""
-    raw_dir = Path('data/raw')
-    output_dir = Path('data/numbers')
-
     # Collect all book directories
-    book_dirs = [d for d in raw_dir.iterdir() if d.is_dir()]
+    book_dirs = [d for d in RAW_DIR.iterdir() if d.is_dir()]
 
     print(f"Found {len(book_dirs)} books to process")
 
     # Process books in parallel
     with ProcessPoolExecutor() as executor:
-        futures = {executor.submit(process_book, book_dir, output_dir): book_dir for book_dir in book_dirs}
+        futures = {executor.submit(process_book, book_dir, OUTPUT_DIR): book_dir for book_dir in book_dirs}
         results = []
         for future in as_completed(futures):
             try:

@@ -169,6 +169,22 @@ def html_to_pdf(html_path: Path, pdf_path: Path):
         browser.close()
 
 
+def compress_pdf(pdf_path: Path, quality: int = 70):
+    """Compress images in PDF to reduce file size.
+
+    Args:
+        pdf_path: Path to PDF file to compress (will be overwritten)
+        quality: JPEG quality for images (0-100, default 70)
+    """
+    writer = pypdf.PdfWriter(clone_from=str(pdf_path))
+    for page in writer.pages:
+        for img in page.images:
+            img.replace(img.image, quality=quality)
+    with open(pdf_path, 'wb') as f:
+        writer.write(f)
+    writer.close()
+
+
 def merge_pdfs(pdf_paths: list[Path], output_path: Path):
     """Merge multiple PDFs into a single PDF."""
     merger = pypdf.PdfWriter()
@@ -196,7 +212,7 @@ def build_toc_html(toc_entries: list[tuple[int, int, int]]) -> str:
     )
 
 
-def main(start: int, max_number: int, numbers_per_page: int, bw: bool, output_file: str):
+def main(start: int, max_number: int, numbers_per_page: int, bw: bool, output_file: str, pdf_quality: int):
     """Generate PDF book with numbers 1 to max_number."""
     OUTPUT_DIR.mkdir(exist_ok=True)
     temp_dir = OUTPUT_DIR / 'temp_pages'
@@ -233,9 +249,10 @@ def main(start: int, max_number: int, numbers_per_page: int, bw: bool, output_fi
         html_path = temp_dir / f'page_{page_num:04d}.html'
         html_path.write_text(html_content, encoding='utf-8')
 
-        # Convert to PDF
+        # Convert to PDF and compress
         pdf_path = temp_dir / f'page_{page_num:04d}.pdf'
         html_to_pdf(html_path, pdf_path)
+        compress_pdf(pdf_path, pdf_quality)
         page_pdfs.append(pdf_path)
 
         # Move to next page
@@ -264,6 +281,7 @@ def main(start: int, max_number: int, numbers_per_page: int, bw: bool, output_fi
 
     title_pdf_path = temp_dir / 'title_page.pdf'
     html_to_pdf(title_page_temp, title_pdf_path)
+    compress_pdf(title_pdf_path, pdf_quality)
 
     # Generate TOC
     print("Generating table of contents...")
@@ -273,6 +291,7 @@ def main(start: int, max_number: int, numbers_per_page: int, bw: bool, output_fi
 
     toc_pdf_path = temp_dir / 'toc.pdf'
     html_to_pdf(toc_html_path, toc_pdf_path)
+    compress_pdf(toc_pdf_path, pdf_quality)
 
     print(f"\nMerging title page + TOC + {len(page_pdfs)} pages...")
     final_pdf = OUTPUT_DIR / output_file
@@ -295,6 +314,8 @@ if __name__ == '__main__':
     parser.add_argument('--bw', action='store_true', help='Render in black and white (default: False)')
     parser.add_argument('--output-file', type=str, default='the_numbers.pdf',
                         help='Output PDF filename (default: the_numbers.pdf)')
+    parser.add_argument('--pdf-quality', type=int, default=70,
+                        help='JPEG quality for PDF images (0-100, lower = smaller file, default: 70)')
     args = parser.parse_args()
 
-    main(args.start, args.max_number, args.numbers_per_page, args.bw, args.output_file)
+    main(args.start, args.max_number, args.numbers_per_page, args.bw, args.output_file, args.pdf_quality)

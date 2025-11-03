@@ -19,7 +19,7 @@ def get_available_numbers(numbers_dir: Path) -> set[int]:
     return available
 
 
-def get_best_image_for_number(number: int, numbers_dir: Path) -> Path | None:
+def get_image_for_number(number: int, numbers_dir: Path) -> Path | None:
     """Get a random available PNG for a number, or None if not found."""
     number_dir = numbers_dir / str(number)
     if not number_dir.exists():
@@ -37,10 +37,6 @@ def find_largest_string_decomposition(target: str, available: set[int]) -> list[
     the current prefix. For example, "12345" with available {1,2,3,123,45} becomes [123, 45].
     Returns list of numbers that compose the target string, or None if impossible.
     """
-    target_int = int(target)
-    if target_int in available:
-        return [target_int]
-
     # Convert available numbers to strings for prefix matching
     available_strs = {str(n): n for n in available}
 
@@ -48,18 +44,14 @@ def find_largest_string_decomposition(target: str, available: set[int]) -> list[
     pos = 0
 
     while pos < len(target):
-        # Find longest prefix match from current position
-        found = False
-        # Try from longest to shortest possible prefix
-        for length in range(len(target) - pos, 0, -1):
-            prefix = target[pos:pos + length]
-            if prefix in available_strs:
-                components.append(available_strs[prefix])
-                pos += length
-                found = True
+        # Try from longest to shortest prefix; exit loop early on match
+        for end in range(len(target), pos, -1):
+            chunk = target[pos:end]
+            if chunk in available_strs:
+                components.append(available_strs[chunk])
+                pos = end
                 break
-
-        if not found:
+        else:
             # Can't compose this number
             return None
 
@@ -143,7 +135,7 @@ def compose_missing_numbers(numbers_dir: Path, max_number: int = 50_000):
         # Get image paths for components
         image_paths = []
         for num in components:
-            img_path = get_best_image_for_number(num, numbers_dir)
+            img_path = get_image_for_number(num, numbers_dir)
             if img_path is None:
                 print(f"Warning: Expected image for {num} but not found")
                 break
