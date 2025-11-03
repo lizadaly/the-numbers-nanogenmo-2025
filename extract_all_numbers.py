@@ -1,5 +1,6 @@
 """Extract number images from hOCR files and JP2 images."""
 import re
+import shutil
 from pathlib import Path
 from collections import defaultdict
 from concurrent.futures import ProcessPoolExecutor, as_completed
@@ -140,11 +141,11 @@ def extract_and_save_numbers(hocr_path: Path, jp2_dir: Path, output_dir: Path, b
 
                 # Crop first to get actual dimensions
                 cropped = img.crop((x0, y0, x1, y1))
-                height = cropped.height
+                width, height = cropped.size
 
-                # Include height in filename
+                # Include width and height in filename
                 base_name = Path(png_name).stem
-                output_path = number_dir / f"{number}_{book_name}_{base_name}_h{height}.png"
+                output_path = number_dir / f"{number}_{book_name}_{base_name}_w{width}_h{height}.png"
 
                 if output_path.exists():
                     cropped.close()
@@ -165,7 +166,8 @@ def process_book(book_dir: Path, output_dir: Path) -> int:
     # Find hOCR file
     hocr_files = list(book_dir.glob('*_hocr.html'))
     if not hocr_files:
-        print(f"No hOCR file found in {book_dir}")
+        print(f"No hOCR file found in {book_dir}, deleting archive")
+        shutil.rmtree(book_dir)
         return 0
 
     hocr_path = hocr_files[0]

@@ -5,11 +5,19 @@ import pypdf
 import re
 
 
-def get_image_for_number(number: int, numbers_dir: Path) -> tuple[Path, int]:
-    """Get the first available PNG for a number and extract its height from filename.
+def get_image_for_number(number: int, numbers_dir: Path, column_width_px: int) -> tuple[Path, int]:
+    """Get the first available PNG for a number and compute its scaled height.
+
+    The height is scaled based on the column width, since images wider than
+    the column will be scaled down proportionally by the CSS max-width: 100%.
+
+    Args:
+        number: The number to get an image for
+        numbers_dir: Directory containing number subdirectories
+        column_width_px: Maximum width available in each column
 
     Returns:
-        Tuple of (image_path, height_in_pixels)
+        Tuple of (image_path, scaled_height_in_pixels)
     """
     number_dir = numbers_dir / str(number)
     png_files = list(number_dir.glob('*.png'))
@@ -18,20 +26,31 @@ def get_image_for_number(number: int, numbers_dir: Path) -> tuple[Path, int]:
 
     image_path = png_files[0]
 
-    # Extract height from filename pattern: *_h{height}.png
-    match = re.search(r'_h(\d+)\.png$', image_path.name)
+    # Extract width and height from filename pattern: *_w{width}_h{height}.png
+    match = re.search(r'_w(\d+)_h(\d+)\.png$', image_path.name)
     if not match:
-        raise ValueError(f"Image filename does not contain height: {image_path}")
+        raise ValueError(f"Image filename does not contain width and height: {image_path}")
 
-    height = int(match.group(1))
-    return image_path, height
+    width = int(match.group(1))
+    height = int(match.group(2))
+
+    # Calculate scaling factor based on column width
+    # If image is wider than column, it will be scaled down
+    scale_factor = min(1.0, column_width_px / width)
+    scaled_height = int(height * scale_factor)
+
+    return image_path, scaled_height
 
 
 GRID_COLUMNS = 5
 
 # Letter page: 8.5in × 11in, with 2in margins = 4.5in × 7in content area
-# At 96 DPI: 7 * 96 = 672px height available per column
-COLUMN_TARGET_HEIGHT_PX = 672
+# At 96 DPI:
+#   - Width: 4.5 * 96 = 432px total, minus 4 gaps of 10px = 392px
+#   - Column width: 392 / 5 = 78px per column (reduced to 75px for safety margin)
+#   - Height: 7 * 96 = 672px height available (reduced to 640px for safety margin)
+COLUMN_WIDTH_PX = 75
+COLUMN_TARGET_HEIGHT_PX = 640
 
 
 def distribute_numbers_to_columns(
@@ -100,7 +119,7 @@ def get_html_style() -> list[str]:
         '        .container {',
         '            flex: 1;',
         '            display: flex;',
-        '            gap: 10px;',
+        '            gap: 30px;',
         '            box-sizing: border-box;',
         '            height: 100%;',
         '        }',
@@ -108,11 +127,12 @@ def get_html_style() -> list[str]:
         '            display: flex;',
         '            flex-direction: column;',
         '            flex: 1 1 0;',
+        '            max-width: 75px;',
         '        }',
         '        .number-item {',
         '            display: flex;',
         '            align-items: flex-start;',
-        '            justify-content: center;',
+        '            justify-content: flex-start;',
         '        }',
         '        .number-image {',
         '            width: auto;',
@@ -137,11 +157,11 @@ def build_page_html(numbers_dir: Path, start_number: int, max_count: int) -> tup
     html_parts = get_html_style()
     html_parts.append('    <div class="container">')
 
-    # Collect numbers with their heights (up to max_count available)
+    # Collect numbers with their scaled heights (up to max_count available)
     numbers_with_heights = []
     for number in range(start_number, start_number + max_count):
-        image_path, height = get_image_for_number(number, numbers_dir)
-        numbers_with_heights.append((number, height, image_path))
+        image_path, scaled_height = get_image_for_number(number, numbers_dir, COLUMN_WIDTH_PX)
+        numbers_with_heights.append((number, scaled_height, image_path))
 
     # Distribute numbers across columns based on heights
     columns, numbers_used = distribute_numbers_to_columns(
@@ -203,6 +223,7 @@ def merge_pdfs(pdf_paths: list[Path], output_path: Path):
 def main():
     """Generate PDF book with numbers 1 to max_number."""
     parser = argparse.ArgumentParser(description='Build a book of numbers 1 to 50,000')
+    parser.add_argument('--start', type=int, default=1, help='Starting number (default: 1)')
     parser.add_argument('--max-number', type=int, default=50_000, help='Maximum number to include (default: 50,000)')
     parser.add_argument('--numbers-per-page', type=int, default=200,
                         help='Maximum number of images to try per page (default: 200)')
@@ -217,7 +238,7 @@ def main():
     print(f"Generating pages (trying up to {args.numbers_per_page} numbers per page, actual count varies by image height)...")
 
     page_pdfs = []
-    current_number = 1
+    current_number = args.start
     page_num = 0
 
     while current_number <= args.max_number:

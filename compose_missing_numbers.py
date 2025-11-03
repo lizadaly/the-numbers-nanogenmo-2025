@@ -3,6 +3,7 @@
 For numbers 1 to 50,000, compose missing digits out of multiple existing digit
 primitives from the data/numbers directory. Use the largest possible value.
 """
+import random
 from pathlib import Path
 from PIL import Image
 
@@ -19,13 +20,13 @@ def get_available_numbers(numbers_dir: Path) -> set[int]:
 
 
 def get_best_image_for_number(number: int, numbers_dir: Path) -> Path | None:
-    """Get the first available PNG for a number, or None if not found."""
+    """Get a random available PNG for a number, or None if not found."""
     number_dir = numbers_dir / str(number)
     if not number_dir.exists():
         return None
 
     png_files = list(number_dir.glob('*.png'))
-    return png_files[0] if png_files else None
+    return random.choice(png_files) if png_files else None
 
 
 def find_largest_string_decomposition(target: str, available: set[int]) -> list[int] | None:
@@ -151,11 +152,11 @@ def compose_missing_numbers(numbers_dir: Path, max_number: int = 50_000):
             # All component images found - compose them
             composite = concatenate_images_horizontally(image_paths)
 
-            # Save to number-specific subdirectory in numbers_dir with height in filename
+            # Save to number-specific subdirectory in numbers_dir with width and height in filename
             target_dir = numbers_dir / str(target)
             target_dir.mkdir(exist_ok=True)
-            height = composite.height
-            output_path = target_dir / f"{target}_composed_h{height}.png"
+            width, height = composite.size
+            output_path = target_dir / f"{target}_composed_w{width}_h{height}.png"
             composite.save(output_path, 'PNG')
             composite.close()
 
