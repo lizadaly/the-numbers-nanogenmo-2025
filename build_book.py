@@ -46,12 +46,12 @@ def get_image_for_number(number: int, numbers_dir: Path, column_width_px: int) -
 
 GRID_COLUMNS = 5
 
-# Letter page: 8.5in × 11in, margins: top 0.8in, bottom 1in, sides 2in
-# Content area height: 11 - 0.8 - 1 = 9.2in, minus 0.75in running head space = 8.45in
+# Letter page: 8.5in × 11in, margins: top 0.88in, bottom 1in, sides 2in
+# Content area height: 11 - 0.88 - 1 = 9.12in, minus 0.75in running head space = 8.37in
 # At 96 DPI:
 #   - Width: 4.5 * 96 = 432px total, minus 4 gaps of 10px = 392px
 #   - Column width: 392 / 5 = 78px per column (reduced to 75px for safety margin)
-#   - Height: 8.45 * 96 = 811px height available (reduced to 800px for safety margin)
+#   - Height: 8.37 * 96 = 804px height available (reduced to 800px for safety margin)
 COLUMN_WIDTH_PX = 75
 COLUMN_TARGET_HEIGHT_PX = 800  
 
