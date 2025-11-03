@@ -270,11 +270,20 @@ def main(start: int, max_number: int, numbers_per_page: int, bw: bool, output_fi
 
     # Generate title page
     print("\nGenerating title page...")
+
+    # Format max_number for display
+    if max_number >= 1000 and max_number % 1000 == 0:
+        max_number_text = f"{max_number // 1000} thousand"
+    else:
+        max_number_text = f"{max_number:,}"
+
     env = Environment(loader=FileSystemLoader('templates'))
     template = env.get_template('title_page.html')
     title_page_html = template.render(
         fonts_dir=Path('fonts').absolute(),
-        bw=bw
+        bw=bw,
+        start_word=num2words(start),
+        max_number_text=max_number_text
     )
 
     title_page_temp = temp_dir / 'title_page.html'
