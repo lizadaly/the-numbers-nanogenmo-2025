@@ -100,7 +100,7 @@ def get_jinja_env() -> Environment:
     return Environment(loader=FileSystemLoader('templates'))
 
 
-def build_page_html(numbers_dir: Path, start_number: int, max_count: int, page_num: int) -> tuple[str, int, int]:
+def build_page_html(numbers_dir: Path, start_number: int, max_count: int, page_num: int, bw: bool = False) -> tuple[str, int, int]:
     """Build HTML for a single page with numbers starting from start_number.
 
     Numbers are distributed across columns to fill each column to approximately
@@ -111,6 +111,7 @@ def build_page_html(numbers_dir: Path, start_number: int, max_count: int, page_n
         start_number: First number to include on this page
         max_count: Maximum number of numbers to try to fit
         page_num: Page number for running head (1-indexed)
+        bw: Whether to render in black and white
 
     Returns:
         Tuple of (html_content, numbers_used, end_number)
@@ -145,7 +146,8 @@ def build_page_html(numbers_dir: Path, start_number: int, max_count: int, page_n
         start_number=start_number,
         end_number=end_number,
         is_recto=is_recto,
-        columns=template_columns
+        columns=template_columns,
+        bw=bw
     )
 
     return html_content, numbers_used, end_number
@@ -180,11 +182,12 @@ def merge_pdfs(pdf_paths: list[Path], output_path: Path):
     merger.close()
 
 
-def build_toc_html(toc_entries: list[tuple[int, int, int]]) -> str:
+def build_toc_html(toc_entries: list[tuple[int, int, int]], bw: bool = False) -> str:
     """Build HTML for table of contents page.
 
     Args:
         toc_entries: List of (start_number, end_number, page_number) tuples
+        bw: Whether to render in black and white
 
     Returns:
         HTML content for the TOC
@@ -200,7 +203,8 @@ def build_toc_html(toc_entries: list[tuple[int, int, int]]) -> str:
     template = env.get_template('toc.html')
     return template.render(
         fonts_dir=Path('fonts').absolute(),
-        toc_entries=template_entries
+        toc_entries=template_entries,
+        bw=bw
     )
 
 
@@ -211,6 +215,9 @@ def main():
     parser.add_argument('--max-number', type=int, default=50_000, help='Maximum number to include (default: 50,000)')
     parser.add_argument('--numbers-per-page', type=int, default=200,
                         help='Maximum number of images to try per page (default: 200)')
+    parser.add_argument('--bw', action='store_true', help='Render in black and white (default: False)')
+    parser.add_argument('--output-file', type=str, default='the_numbers.pdf',
+                        help='Output PDF filename (default: the_numbers.pdf)')
     args = parser.parse_args()
 
     numbers_dir = Path('data/numbers')
@@ -225,10 +232,8 @@ def main():
     current_number = args.start
     page_num = 0
 
-    # Track TOC entries: (start_number, end_number, page_number)
-    toc_entries = []
-    current_range_start = None
-    current_range_page = None
+    # Track which 1000-number ranges we've seen: maps range_num -> first page where it appeared
+    range_to_page = {}
 
     while current_number <= args.max_number:
         # Calculate how many numbers we could try to fit on this page
@@ -236,7 +241,7 @@ def main():
         max_count = min(args.numbers_per_page, remaining)
 
         # Generate HTML for this page and see how many numbers actually fit
-        html_content, numbers_used, end_number = build_page_html(numbers_dir, current_number, max_count, page_num + 1)
+        html_content, numbers_used, end_number = build_page_html(numbers_dir, current_number, max_count, page_num + 1, args.bw)
 
         if numbers_used == 0:
             print(f"Warning: No numbers fit on page starting at {current_number}")
@@ -244,18 +249,14 @@ def main():
 
         print(f"Page {page_num + 1} (numbers {current_number}-{end_number})...")
 
-        # Track TOC entry for each 1000-number range
-        if current_range_start is None or (current_number - 1) // 1000 != (current_range_start - 1) // 1000:
-            # Starting a new 1000-number range
-            if current_range_start is not None:
-                # Save the previous range
-                prev_range_num = (current_range_start - 1) // 1000
-                range_start = prev_range_num * 1000 + 1
-                range_end = min(range_start + 999, args.max_number)
-                toc_entries.append((range_start, range_end, current_range_page))
+        # Track TOC entry for each 1000-number range that appears on this page
+        page_start_range = (current_number - 1) // 1000
+        page_end_range = (end_number - 1) // 1000
 
-            current_range_start = current_number
-            current_range_page = page_num + 1
+        # Record the first page for any new ranges on this page
+        for range_idx in range(page_start_range, page_end_range + 1):
+            if range_idx not in range_to_page:
+                range_to_page[range_idx] = page_num + 1
 
         html_path = temp_dir / f'page_{page_num:04d}.html'
         html_path.write_text(html_content, encoding='utf-8')
@@ -269,12 +270,13 @@ def main():
         current_number += numbers_used
         page_num += 1
 
-    # Add the final range to TOC
-    if current_range_start is not None:
-        prev_range_num = (current_range_start - 1) // 1000
-        range_start = prev_range_num * 1000 + 1
+    # Build TOC entries from range tracking
+    toc_entries = []
+    for range_idx in sorted(range_to_page.keys()):
+        range_start = range_idx * 1000 + 1
         range_end = min(range_start + 999, args.max_number)
-        toc_entries.append((range_start, range_end, current_range_page))
+        page_num = range_to_page[range_idx]
+        toc_entries.append((range_start, range_end, page_num))
 
     # Generate title page with absolute font paths
     print("\nGenerating title page...")
@@ -288,6 +290,17 @@ def main():
         f'url("file://{fonts_dir}/'
     )
 
+    # Add grayscale filter if BW mode is enabled
+    if args.bw:
+        grayscale_css = """
+        @media print {
+            img {
+                filter: grayscale(100%);
+            }
+        }
+"""
+        title_page_html = title_page_html.replace('</style>', f'{grayscale_css}    </style>')
+
     title_page_temp = temp_dir / 'title_page.html'
     title_page_temp.write_text(title_page_html, encoding='utf-8')
 
@@ -296,7 +309,7 @@ def main():
 
     # Generate TOC
     print("Generating table of contents...")
-    toc_html = build_toc_html(toc_entries)
+    toc_html = build_toc_html(toc_entries, args.bw)
     toc_html_path = temp_dir / 'toc.html'
     toc_html_path.write_text(toc_html, encoding='utf-8')
 
@@ -304,7 +317,7 @@ def main():
     html_to_pdf(toc_html_path, toc_pdf_path)
 
     print(f"\nMerging title page + TOC + {len(page_pdfs)} pages...")
-    final_pdf = output_dir / 'the_numbers.pdf'
+    final_pdf = output_dir / args.output_file
     merge_pdfs([title_pdf_path, toc_pdf_path] + page_pdfs, final_pdf)
 
     print("\nCleaning up temporary PDFs...")

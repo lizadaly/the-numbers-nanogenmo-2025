@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}The Numbers{% endblock %}</title>
+    <style>
+        @font-face {
+            font-family: "TeX Gyre Schola";
+            src: url("file://{{ fonts_dir }}/texgyreschola-regular.woff2") format("woff2");
+            font-weight: normal;
+            font-style: normal;
+        }
+        @font-face {
+            font-family: "TeX Gyre Schola";
+            src: url("file://{{ fonts_dir }}/texgyreschola-bold.woff2") format("woff2");
+            font-weight: bold;
+            font-style: normal;
+        }
+        @font-face {
+            font-family: "TeX Gyre Schola";
+            src: url("file://{{ fonts_dir }}/texgyreschola-italic.woff2") format("woff2");
+            font-weight: normal;
+            font-style: italic;
+        }
+        @font-face {
+            font-family: "TeX Gyre Schola";
+            src: url("file://{{ fonts_dir }}/texgyreschola-bolditalic.woff2") format("woff2");
+            font-weight: bold;
+            font-style: italic;
+        }
+        @page {
+            margin: 0.75in 2in 2in 2in;
+        }
+        html, body {
+            height: 100%;
+        }
+        body {
+            font-family: "TeX Gyre Schola", Georgia, serif;
+            margin: 0;
+            padding: 0;
+        }
+        .page-content {
+            display: flex;
+            flex-direction: column;
+            min-height: 100%;
+        }
+        .running-head {
+            font-size: 10pt;
+            font-family: "TeX Gyre Schola", Georgia, serif;
+            margin-bottom: 0.75in;
+            width: 100%;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .running-head .page-number {
+            flex: 0 0 auto;
+        }
+        .running-head .number-range {
+            flex: 1;
+            text-align: center;
+        }
+        .running-head .spacer {
+            flex: 0 0 auto;
+            visibility: hidden;
+        }
+        .container {
+            flex: 1;
+            display: flex;
+            gap: 30px;
+            box-sizing: border-box;
+        }
+        .column {
+            display: flex;
+            flex-direction: column;
+            flex: 1 1 0;
+            max-width: 75px;
+        }
+        .number-item {
+            display: flex;
+            align-items: flex-start;
+            justify-content: flex-start;
+        }
+        .number-image {
+            width: auto;
+            height: auto;
+            max-width: 100%;
+        }
+        {% block extra_style %}{% endblock %}
+        {% if bw %}
+        @media print {
+            img {
+                filter: grayscale(100%);
+            }
+        }
+        {% endif %}
+    </style>
+</head>
+<body>
+{% block content %}{% endblock %}
+</body>
+</html>

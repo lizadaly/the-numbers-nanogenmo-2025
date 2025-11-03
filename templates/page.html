@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+
+{% block content %}
+    <div class="page-content">
+        <div class="running-head">
+            {% if is_recto %}
+            <span class="spacer">{{ page_num }}</span>
+            <span class="number-range">{{ "{:,}".format(start_number) }}–{{ "{:,}".format(end_number) }}</span>
+            <span class="page-number">{{ page_num }}</span>
+            {% else %}
+            <span class="page-number">{{ page_num }}</span>
+            <span class="number-range">{{ "{:,}".format(start_number) }}–{{ "{:,}".format(end_number) }}</span>
+            <span class="spacer">{{ page_num }}</span>
+            {% endif %}
+        </div>
+        <div class="container">
+            {% for column in columns %}
+            {% if column %}
+            <div class="column">
+                {% for number, image_path in column %}
+                <div class="number-item">
+                    <img src="file://{{ image_path }}" alt="{{ number }}" class="number-image">
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+            {% endfor %}
+        </div>
+    </div>
+{% endblock %}

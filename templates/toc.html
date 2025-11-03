@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+
+{% block extra_style %}
+        .toc-container {
+            padding: 50px 0;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+        .toc-title {
+            font-family: "TeX Gyre Schola", Georgia, serif;
+            font-size: 24pt;
+            font-weight: normal;
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .toc-divider {
+            border-top: 1px solid #000;
+            margin-bottom: 50px;
+        }
+        .toc-entry {
+            font-family: "TeX Gyre Schola", Georgia, serif;
+            font-size: 12pt;
+            margin-bottom: 18px;
+            line-height: 1.3;
+            display: flex;
+            white-space: nowrap;
+        }
+        .toc-range {
+            flex-shrink: 0;
+        }
+        .toc-dots {
+            flex-shrink: 1;
+            overflow: hidden;
+            max-width: 100%;
+        }
+        .toc-page {
+            flex-shrink: 0;
+        }
+{% endblock %}
+
+{% block content %}
+    <div class="toc-container">
+        <div class="toc-title">Table of Contents</div>
+        <div class="toc-divider"></div>
+        {% for start, end, page, chapter_word in toc_entries %}
+        <div class="toc-entry">
+            <span class="toc-range">Chapter {{ chapter_word }}: {{ "{:,}".format(start) }} to {{ "{:,}".format(end) }}&nbsp;&nbsp;</span>
+            <span class="toc-dots">{{ "." * 200 }}</span>
+            <span class="toc-page">&nbsp;&nbsp;{{ page }}</span>
+        </div>
+        {% endfor %}
+    </div>
+{% endblock %}
