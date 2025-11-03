@@ -2,6 +2,9 @@
 
 Generate a PDF of a book containing the numbers one to fifty-thousand as automatically extracted from a corpus of scanned books.
 
+![Sample page showing numbers](examples/color-page.png)
+
+
 ## Steps
 
 1. **Fetch copyright-free books from the Internet Archive**
@@ -32,9 +35,9 @@ Generate a PDF of a book containing the numbers one to fifty-thousand as automat
 
    Generate a PDF file (and intermediate HTML output) of the number pages, along with a table of contents and cover page.
 
-## Recommended collections
+## Suggested Internet Archive collections
 
-Best collections by item count (pre-1925, English, public domain):
+Best collections with hOCR data by item count (pre-1925, English, public domain):
 
 - americana: 987,258
 - toronto: 251,969
@@ -42,11 +45,27 @@ Best collections by item count (pre-1925, English, public domain):
 - internetarchivebooks: 158,978
 - university_of_toronto: 156,370
 - library_of_congress: 149,071
-- robarts: 95,912
-- microfilm: 68,979
 - bostonpubliclibrary: 36,520
 - allen_county: 28,794
 - gerstein: 22,114
 - cornell: 21,352
 - trent_university: 10,177
 
+
+## More examples
+
+Spreads:
+
+![Samples showing spreads](examples/number-spread.png)
+
+Generated table of contents:
+
+![TOC](examples/toc.png)
+
+Detail:
+
+![Number extraction detail](examples/number-detail.png)
+
+Also in black-and-white if you like:
+
+![Number extraction detail](examples/bw-page.png)

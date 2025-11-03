@@ -180,7 +180,7 @@ def compress_pdf(pdf_path: Path, quality: int = 70):
     writer = pypdf.PdfWriter(clone_from=str(pdf_path))
     for page in writer.pages:
         for img in page.images:
-            img.replace(img.image, quality=quality)
+            img.replace(img.image, quality=quality)  # type: ignore[arg-type]
     with open(pdf_path, 'wb') as f:
         writer.write(f)
     writer.close()
