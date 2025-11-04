@@ -81,13 +81,13 @@ def main(email: str, collection: str, limit: int):
     for item_dir in Path(output_base).iterdir():
         for zip_path in item_dir.glob("*.zip"):
             # Check if already extracted
-            with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+            with zipfile.ZipFile(zip_path, "r") as zip_ref:
                 all_extracted = all((item_dir / name).exists() for name in zip_ref.namelist())
 
             if all_extracted:
                 continue
 
-            with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+            with zipfile.ZipFile(zip_path, "r") as zip_ref:
                 zip_ref.extractall(item_dir)
             print(f"✅ Extracted {zip_path}")
 

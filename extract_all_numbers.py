@@ -1,4 +1,5 @@
 """Extract number images from hOCR files and JP2 images."""
+
 import re
 import shutil
 from pathlib import Path
@@ -11,16 +12,16 @@ from word2number import w2n
 
 type NumberWithBbox = tuple[int, int, int, int, int]
 
-T = TypeVar('T')
+T = TypeVar("T")
 
 # Precompiled regex patterns for hOCR metadata
-_BBOX_RE = re.compile(r'bbox (\d+) (\d+) (\d+) (\d+)')
-_CONFIDENCE_RE = re.compile(r'x_wconf (\d+(?:\.\d+)?)')
+_BBOX_RE = re.compile(r"bbox (\d+) (\d+) (\d+) (\d+)")
+_CONFIDENCE_RE = re.compile(r"x_wconf (\d+(?:\.\d+)?)")
 _IMAGE_PATH_RE = re.compile(r'image "([^"]+)"')
 
 # Directory paths
-RAW_DIR = Path('data/raw')
-OUTPUT_DIR = Path('data/numbers')
+RAW_DIR = Path("data/raw")
+OUTPUT_DIR = Path("data/numbers")
 
 
 def _match_group(title: str, pattern: re.Pattern, *, cast: Callable[[str], T]) -> T | None:
@@ -42,7 +43,7 @@ def extract_number_from_text(text: str) -> int | None:
     # (no leading zeros except for "0" itself)
     if text.isdigit():
         # Reject strings like "00" or "000" - only accept "0"
-        if text.startswith('0') and len(text) > 1:
+        if text.startswith("0") and len(text) > 1:
             return None
         num = int(text)
         if 0 <= num <= 50_000:
@@ -91,19 +92,19 @@ def extract_numbers_from_hocr(hocr_path: Path) -> dict[str, list[NumberWithBbox]
     seen_numbers: set[int] = set()
 
     # Find all pages
-    for page in html.css('div.ocr_page'):
-        if not (page_title := page.attributes.get('title')):
+    for page in html.css("div.ocr_page"):
+        if not (page_title := page.attributes.get("title")):
             continue
         if (image_name := parse_image_path(page_title)) is None:
             continue
 
         # Find all words on this page
-        for word in page.css('span.ocrx_word'):
+        for word in page.css("span.ocrx_word"):
             if not (text := word.text()):
                 continue
             if (number := extract_number_from_text(text)) is None or number in seen_numbers:
                 continue
-            if not (word_title := word.attributes.get('title')):
+            if not (word_title := word.attributes.get("title")):
                 continue
             if (confidence := parse_confidence(word_title)) is None or confidence <= 90:
                 continue
@@ -135,7 +136,7 @@ def extract_and_save_numbers(hocr_path: Path, jp2_dir: Path, output_dir: Path, b
             print(f"Warning: JP2 not found: {jp2_path}")
             continue
 
-        png_name = Path(image_name).with_suffix('.png').name
+        png_name = Path(image_name).with_suffix(".png").name
 
         # Open JP2 image once for this page
         with Image.open(jp2_path) as img:
@@ -157,7 +158,7 @@ def extract_and_save_numbers(hocr_path: Path, jp2_dir: Path, output_dir: Path, b
                     continue
 
                 number_dir.mkdir(exist_ok=True)
-                cropped.save(output_path, 'PNG')
+                cropped.save(output_path, "PNG")
                 cropped.close()
                 count += 1
 
@@ -168,7 +169,7 @@ def extract_and_save_numbers(hocr_path: Path, jp2_dir: Path, output_dir: Path, b
 def process_book(book_dir: Path, output_dir: Path) -> int:
     """Process a single book directory."""
     # Find hOCR file
-    hocr_files = list(book_dir.glob('*_hocr.html'))
+    hocr_files = list(book_dir.glob("*_hocr.html"))
     if not hocr_files:
         print(f"No hOCR file found in {book_dir}, deleting archive")
         shutil.rmtree(book_dir)
@@ -177,7 +178,7 @@ def process_book(book_dir: Path, output_dir: Path) -> int:
     hocr_path = hocr_files[0]
 
     # Find JP2 directory
-    jp2_dirs = list(book_dir.glob('*_jp2'))
+    jp2_dirs = list(book_dir.glob("*_jp2"))
     if not jp2_dirs:
         print(f"No JP2 files found in {book_dir}, deleting archive")
         shutil.rmtree(book_dir)
@@ -210,5 +211,5 @@ def main():
     print(f"Total numbers extracted: {total}")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

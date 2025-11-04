@@ -3,6 +3,7 @@
 For numbers 1 to 50,000, compose missing digits out of multiple existing digit
 primitives from the data/numbers directory. Use the largest possible value.
 """
+
 import random
 from pathlib import Path
 from PIL import Image
@@ -14,7 +15,7 @@ def get_available_numbers(numbers_dir: Path) -> set[int]:
     for d in numbers_dir.iterdir():
         if d.is_dir() and d.name.isdigit():
             # Only count as available if there are actual PNG files
-            if list(d.glob('*.png')):
+            if list(d.glob("*.png")):
                 available.add(int(d.name))
     return available
 
@@ -25,7 +26,7 @@ def get_image_for_number(number: int, numbers_dir: Path) -> Path | None:
     if not number_dir.exists():
         return None
 
-    png_files = list(number_dir.glob('*.png'))
+    png_files = list(number_dir.glob("*.png"))
     return random.choice(png_files) if png_files else None
 
 
@@ -79,7 +80,7 @@ def concatenate_images_horizontally(image_paths: list[Path]) -> Image.Image:
     total_width = sum(img.width for img in resized)
 
     # Create composite image
-    composite = Image.new('RGB', (total_width, max_height), color='white')
+    composite = Image.new("RGB", (total_width, max_height), color="white")
 
     # Paste images
     x_offset = 0
@@ -87,7 +88,7 @@ def concatenate_images_horizontally(image_paths: list[Path]) -> Image.Image:
         composite.paste(img, (x_offset, 0))
         x_offset += img.width
 
-    # Clean up 
+    # Clean up
     for img in images:
         img.close()
 
@@ -104,7 +105,7 @@ def compose_missing_numbers(numbers_dir: Path, max_number: int = 50_000):
     """
 
     # Remove all existing composed images first (both old and new format)
-    composed_files = list(numbers_dir.glob('*/*_composed*.png'))
+    composed_files = list(numbers_dir.glob("*/*_composed*.png"))
     if composed_files:
         print(f"Removing {len(composed_files)} existing composed images...")
         for f in composed_files:
@@ -149,7 +150,7 @@ def compose_missing_numbers(numbers_dir: Path, max_number: int = 50_000):
             target_dir.mkdir(exist_ok=True)
             width, height = composite.size
             output_path = target_dir / f"{target}_composed_w{width}_h{height}.png"
-            composite.save(output_path, 'PNG')
+            composite.save(output_path, "PNG")
             composite.close()
 
             composed_count += 1
@@ -164,10 +165,10 @@ def compose_missing_numbers(numbers_dir: Path, max_number: int = 50_000):
 
 def main():
     """Compose all missing numbers from existing primitives."""
-    numbers_dir = Path('data/numbers')
+    numbers_dir = Path("data/numbers")
 
     compose_missing_numbers(numbers_dir)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
