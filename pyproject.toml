@@ -1,10 +1,13 @@
 [project]
 name = "the-numbers"
-version = "0.0.1"
+version = "1.0.0"
 description = "NaNoGenMo 2025 project"
+authors = [
+    {name = "Liza Daly", email = "lizadaly@gmail.com"}
+]
+license = {text = "Unlicense"}
 requires-python = ">=3.14"
 dependencies = [
-    "aiohttp>=3.11.0",
     "jinja2>=3.1.6",
     "num2words>=0.5.14",
     "pillow>=12.0.0",
