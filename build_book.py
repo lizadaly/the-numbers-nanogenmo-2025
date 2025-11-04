@@ -2,10 +2,10 @@
 
 from pathlib import Path
 import argparse
-import pypdf
 import re
 from num2words import num2words
 from jinja2 import Environment, FileSystemLoader
+from utils import get_image_with_dimensions, distribute_items_to_columns, html_to_pdf, compress_pdf, merge_pdfs
 
 GRID_COLUMNS = 5
 
@@ -25,9 +25,6 @@ OUTPUT_DIR = Path("output")
 def get_image_for_number(number: int, numbers_dir: Path, column_width_px: int) -> tuple[Path, int]:
     """Get the first available PNG for a number and compute its scaled height.
 
-    The height is scaled based on the column width, since images wider than
-    the column will be scaled down proportionally by the CSS max-width: 100%.
-
     Args:
         number: The number to get an image for
         numbers_dir: Directory containing number subdirectories
@@ -37,35 +34,16 @@ def get_image_for_number(number: int, numbers_dir: Path, column_width_px: int) -
         Tuple of (image_path, scaled_height_in_pixels)
     """
     number_dir = numbers_dir / str(number)
-    png_files = list(number_dir.glob("*.png"))
-    if not png_files:
+    try:
+        return get_image_with_dimensions(number_dir, column_width_px)
+    except FileNotFoundError:
         raise FileNotFoundError(f"No PNG files found for number {number} in {number_dir}; do you need to run compose?")
-
-    image_path = png_files[0]
-
-    # Extract width and height from filename pattern: *_w{width}_h{height}.png
-    match = re.search(r"_w(\d+)_h(\d+)\.png$", image_path.name)
-    if not match:
-        raise ValueError(f"Image filename does not contain width and height: {image_path}")
-
-    width = int(match.group(1))
-    height = int(match.group(2))
-
-    # Calculate scaling factor based on column width
-    # If image is wider than column, it will be scaled down
-    scale_factor = min(1.0, column_width_px / width)
-    scaled_height = int(height * scale_factor)
-
-    return image_path, scaled_height
 
 
 def distribute_numbers_to_columns(
     numbers_with_heights: list[tuple[int, int, Path]], num_columns: int, target_height: int
 ) -> tuple[list[list[tuple[int, Path]]], int]:
     """Distribute numbers across columns sequentially, filling each column to target height.
-
-    Numbers are added in order down the first column until target height is reached,
-    then down the second column, etc. Stops when all columns are filled.
 
     Args:
         numbers_with_heights: List of (number, height, image_path) tuples in sequential order
@@ -76,27 +54,7 @@ def distribute_numbers_to_columns(
         Tuple of (columns, numbers_used) where columns is a list of columns and
         numbers_used is the count of numbers actually placed
     """
-    columns: list[list[tuple[int, Path]]] = [[] for _ in range(num_columns)]
-    current_column_idx = 0
-    current_height = 0
-    numbers_used = 0
-
-    for number, height, image_path in numbers_with_heights:
-        # If adding this number would exceed target, try to move to next column
-        if current_height + height > target_height:
-            # Stop if we're already on the last column and it would exceed target
-            if current_column_idx >= num_columns - 1:
-                break
-            # Otherwise move to next column
-            current_column_idx += 1
-            current_height = 0
-
-        # Add to current column
-        columns[current_column_idx].append((number, image_path))
-        current_height += height
-        numbers_used += 1
-
-    return columns, numbers_used
+    return distribute_items_to_columns(numbers_with_heights, num_columns, target_height)
 
 
 def build_page_html(
@@ -147,47 +105,6 @@ def build_page_html(
     )
 
     return html_content, numbers_used, end_number
-
-
-def html_to_pdf(html_path: Path, pdf_path: Path):
-    """Convert HTML to PDF using playwright."""
-    from playwright.sync_api import sync_playwright
-
-    with sync_playwright() as p:
-        browser = p.chromium.launch()
-        page = browser.new_page()
-
-        page.goto(f"file://{html_path.absolute()}", wait_until="load", timeout=120_000)
-
-        page.pdf(path=str(pdf_path), format="Letter", print_background=True)
-        browser.close()
-
-
-def compress_pdf(pdf_path: Path, quality: int = 70):
-    """Compress images in PDF to reduce file size.
-
-    Args:
-        pdf_path: Path to PDF file to compress (will be overwritten)
-        quality: JPEG quality for images (0-100, default 70)
-    """
-    writer = pypdf.PdfWriter(clone_from=str(pdf_path))
-    for page in writer.pages:
-        for img in page.images:
-            img.replace(img.image, quality=quality)  # type: ignore[arg-type]
-    with open(pdf_path, "wb") as f:
-        writer.write(f)
-    writer.close()
-
-
-def merge_pdfs(pdf_paths: list[Path], output_path: Path):
-    """Merge multiple PDFs into a single PDF."""
-    merger = pypdf.PdfWriter()
-
-    for pdf_path in pdf_paths:
-        merger.append(str(pdf_path))
-
-    merger.write(str(output_path))
-    merger.close()
 
 
 def build_toc_html(toc_entries: list[tuple[int, int, int]]) -> str:

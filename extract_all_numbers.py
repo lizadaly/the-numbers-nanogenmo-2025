@@ -1,34 +1,20 @@
 """Extract number images from hOCR files and JP2 images."""
 
-import re
 import shutil
 from pathlib import Path
 from collections import defaultdict
 from concurrent.futures import ProcessPoolExecutor, as_completed
-from typing import TypeVar, Callable
 from selectolax.parser import HTMLParser
 from PIL import Image
 from word2number import w2n
 
+from utils import parse_bbox, parse_confidence, parse_image_path
+
 type NumberWithBbox = tuple[int, int, int, int, int]
-
-T = TypeVar("T")
-
-# Precompiled regex patterns for hOCR metadata
-_BBOX_RE = re.compile(r"bbox (\d+) (\d+) (\d+) (\d+)")
-_CONFIDENCE_RE = re.compile(r"x_wconf (\d+(?:\.\d+)?)")
-_IMAGE_PATH_RE = re.compile(r'image "([^"]+)"')
 
 # Directory paths
 RAW_DIR = Path("data/raw")
 OUTPUT_DIR = Path("data/numbers")
-
-
-def _match_group(title: str, pattern: re.Pattern, *, cast: Callable[[str], T]) -> T | None:
-    """Extract and convert a regex match from hOCR title attribute."""
-    if match := pattern.search(title):
-        return cast(match.group(1))
-    return None
 
 
 def extract_number_from_text(text: str) -> int | None:
@@ -59,24 +45,6 @@ def extract_number_from_text(text: str) -> int | None:
         pass
 
     return None
-
-
-def parse_bbox(title: str) -> tuple[int, int, int, int] | None:
-    """Extract bounding box coordinates from hOCR title attribute."""
-    if match := _BBOX_RE.search(title):
-        x0, y0, x1, y1 = map(int, match.groups())
-        return (x0, y0, x1, y1)
-    return None
-
-
-def parse_confidence(title: str) -> float | None:
-    """Extract OCR confidence from hOCR title attribute (x_wconf)."""
-    return _match_group(title, _CONFIDENCE_RE, cast=float)
-
-
-def parse_image_path(title: str) -> str | None:
-    """Extract image path from hOCR title attribute."""
-    return _match_group(title, _IMAGE_PATH_RE, cast=lambda p: Path(p).name)
 
 
 def extract_numbers_from_hocr(hocr_path: Path) -> dict[str, list[NumberWithBbox]]:

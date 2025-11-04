@@ -83,9 +83,14 @@
             justify-content: flex-start;
         }
         .number-image {
+            {% if normalize_width %}
+            width: 100%;
+            height: auto;
+            {% else %}
             width: auto;
             height: auto;
             max-width: 100%;
+            {% endif %}
         }
         {% block extra_style %}{% endblock %}
         {% if bw %}
